@@ -1,15 +1,7 @@
 ################################
-# CONSTANTS
+# DIGITS
 ################################
 
-TT_INT = "INT"
-TT_FLOAT = "FLOAT"
-TT_MUL = "MULTIPLY"
-TT_DIV = "DIVIDE"
-TT_PLUS = "PLUS"
-TT_MINUS = "MINUS"
-TT_OPARENT = "OPARENT"
-TT_CPARENT = "CPARENT"
 DIGITS = "0123456789"
 
 
@@ -50,6 +42,7 @@ class Positions:
         self.column += 1
 
         if current_char == '\n':
+            self.index = 0
             self.line += 1
             self.column = 0
 
@@ -62,6 +55,16 @@ class Positions:
 ################################
 # TOKENS
 ################################
+
+TT_INT = "INT"
+TT_FLOAT = "FLOAT"
+TT_MUL = "MULTIPLY"
+TT_DIV = "DIVIDE"
+TT_PLUS = "PLUS"
+TT_MINUS = "MINUS"
+TT_OPARENT = "OPARENT"
+TT_CPARENT = "CPARENT"
+
 
 class Token:
     def __init__(self, _type, value=None):
@@ -79,10 +82,10 @@ class Token:
 ################################
 
 class Lexer:
-    def __init__(self, filename, inp):
+    def __init__(self, filename, text):
         self.filename = filename
-        self.text = inp
-        self.pos = Positions(-1, 0, -1, filename, inp)
+        self.text = text
+        self.pos = Positions(-1, 0, -1, filename, text)
         self.current_char = None
         self.advanced()
 
@@ -143,12 +146,86 @@ class Lexer:
 
 
 ################################
-# RUN
+# NODES
 ################################
 
+class NumberNode:
+    def __init__(self, token):
+        self.token = token
+
+    def __repr__(self):
+        return f"{self.token}"
+
+
+class BinaryOperationsNode:
+    def __init__(self, left_node, operation_token, right_node):
+        self.left_node = left_node
+        self.operation_token = operation_token
+        self.right_node = right_node
+
+    def __repr__(self):
+        return f"({self.left_node}, {self.operation_token}, {self.right_node})"
+
+
+################################
+# PARSER
+################################
+
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.token_index = -1
+        self.current_token = None
+        self.advance()
+
+    def advance(self):
+        self.token_index += 1
+
+        if self.token_index < len(self.tokens):
+            self.current_token = self.tokens[self.token_index]
+
+        return self.current_token
+
+    def parse(self):
+        res = self.expression()
+        return res
+
+    def factor(self):
+        token = self.current_token
+
+        if token.type in (TT_INT, TT_FLOAT):
+            self.advance()
+            return NumberNode(token)
+
+    def term(self):
+        return self.binary_operation(self.factor, (TT_MUL, TT_DIV))
+
+    def expression(self):
+        return self.binary_operation(self.term, (TT_PLUS, TT_MINUS))
+
+    def binary_operation(self, func, operations):
+        left = func()
+
+        while self.current_token.type in operations:
+            operation_token = self.current_token
+            self.advance()
+            right = func()
+            left = BinaryOperationsNode(left, operation_token, right)
+
+        return left
+
+
+################################
+# RUN
+################################
 
 def run(filename, inp):
     lexer = Lexer(filename, inp)
     tokens, error = lexer.make_tokens()
+    if error: return None, error
 
-    return tokens, error
+    # Generate AST
+    parser = Parser(tokens)
+    ast = parser.parse()
+
+    return ast, error
